@@ -1,16 +1,10 @@
 import { useState } from 'react';
-import { biverr_backend } from 'declarations/biverr_backend';
 
 function App() {
   const [greeting, setGreeting] = useState('');
 
   function handleSubmit(event) {
-    event.preventDefault();
-    const name = event.target.elements.name.value;
-    biverr_backend.greet(name).then((greeting) => {
-      setGreeting(greeting);
-    });
-    return false;
+   event.preventDefault();
   }
 
   return (

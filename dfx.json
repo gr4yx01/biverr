@@ -1,12 +1,30 @@
 {
   "canisters": {
-    "biverr_backend": {
-      "main": "src/biverr_backend/main.mo",
+    "user_canister": {
+      "main": "src/biverr_backend/users/main.mo",
+      "type": "motoko"
+    },
+    "task_canister": {
+      "main": "src/biverr_backend/tasks/main.mo",
+      "type": "motoko"
+    },
+    "bid_canister": {
+      "main": "src/biverr_backend/bids/main.mo",
+      "type": "motoko"
+    },
+    "ledger_canister": {
+      "main": "src/biverr_backend/ledger/main.mo",
+      "type": "motoko"
+    },
+    "escrow_canister": {
+      "main": "src/biverr_backend/escrow/main.mo",
       "type": "motoko"
     },
     "biverr_frontend": {
       "dependencies": [
-        "biverr_backend"
+        "user_canister",
+        "task_canister",
+        "bid_canister"
       ],
       "source": [
         "src/biverr_frontend/dist"
