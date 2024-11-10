@@ -20,11 +20,18 @@
       "main": "src/biverr_backend/escrow/main.mo",
       "type": "motoko"
     },
+    "nft_canister": {
+      "main": "src/biverr_backend/nft/main.mo",
+      "type": "motoko"
+    },
     "biverr_frontend": {
       "dependencies": [
         "user_canister",
         "task_canister",
-        "bid_canister"
+        "bid_canister",
+        "escrow_canister",
+        "ledger_canister",
+        "nft_canister"
       ],
       "source": [
         "src/biverr_frontend/dist"

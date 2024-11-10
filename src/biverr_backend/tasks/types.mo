@@ -19,17 +19,18 @@ module {
         deadline: ?Time.Time;
         status: TaskStatus;
         bid_amount_min: Nat64;
-        // client: Principal;
+        client: Principal;
         selectedFreelancer: ?Principal;
         // imageUrl: ?Blob;
     };
 
     public type TaskStatus = {
-    #Open;           // Task is available and not yet assigned to a freelancer
-    #Assigned;       // Task has been assigned to a freelancer but not yet started
-    #InProgress;     // Freelancer has started working on the task
-    #Completed;      // Task has been completed by the freelancer
-    #Closed;         // Task is no longer available (either completed or canceled)
-};
-
+        #Open;
+        #Submitted;
+        #Approved;
+        #Rejected;
+        #Assigned;       // Task has been assigned to a freelancer but not yet started
+        #Completed;      // Task has been completed by the freelancer
+        #Closed;         // Task is no longer available (either completed or canceled)
+    };
 }

@@ -4,7 +4,7 @@ import Result "mo:base/Result";
 import Option "mo:base/Option";
 import Iter "mo:base/Iter";
 import Text "mo:base/Text";
-import Buffer "mo:base/Buffer";
+import Principal "mo:base/Principal";
 import TaskTypes "../tasks/types";
 import BidTypes "../bids/types";
 import LedgerCanister "canister:ledger_canister";
@@ -16,15 +16,18 @@ actor {
     type CompositeKey = (Nat64, Nat64);
 
     var taskEscrow: HashMap.HashMap<TaskId, Nat64> = HashMap.HashMap<TaskId, Nat64>(0, Nat64.equal, Nat64.toNat32);
-    var bidEscrow: HashMap.HashMap<TaskId, HashMap.HashMap<Nat64, Bid>> = HashMap.HashMap<TaskId, HashMap.HashMap<Nat64, Bid>>(0, Nat64.equal, Nat64.toNat32);
+    var bidEscrow: HashMap.HashMap<TaskId, HashMap.HashMap<Principal, Bid>> = HashMap.HashMap<TaskId, HashMap.HashMap<Principal, Bid>>(0, Nat64.equal, Nat64.toNat32);
 
     public func getTaskEscrow(): async [(TaskId, Nat64)] {
         return Iter.toArray(taskEscrow.entries());
     };
 
-    // public func getBidEscrow(): async [(TaskId, [Bid])] {
-    //     return Iter.toArray(bidEscrow.entries());
-    // };
+    public func getTaskbids(taskId: TaskId): async [(Principal, Bid)] {
+        switch (bidEscrow.get(taskId)) {
+            case (?bidsMap) return Iter.toArray(bidsMap.entries());
+            case null return [];
+        }
+    };
 
     public func fundTask(taskId: Nat64, amount: Nat64, p: Principal): async Result.Result<(), Text> {
         let balance = await LedgerCanister.getBalance(p);
@@ -61,6 +64,7 @@ actor {
             return #err("Insufficient balance");
         };
 
+
         switch(await LedgerCanister._burn(bid.amount, p)) {
             case (#err(errMsg)) {
                 return #err(errMsg);
@@ -68,46 +72,81 @@ actor {
             case (#ok) {
                 let tasksBid = switch (bidEscrow.get(taskId)) {
                     case (?bidsMap) bidsMap;
-                    case null {
-                        let newBidsMap = HashMap.HashMap<Nat64, Bid>(0, Nat64.equal, Nat64.toNat32);
+                    case (null) {
+                        let newBidsMap = HashMap.HashMap<Principal, Bid>(0, Principal.equal, Principal.hash);
                         bidEscrow.put(taskId, newBidsMap);
-                        newBidsMap
+                        newBidsMap;
                     }
                 };
 
-                tasksBid.put(bid.id, bid);
+                if(_bidPlaced(p, Iter.toArray(tasksBid.vals()))) {
+                    return #err("Bid already placed");
+                };
+                
+                tasksBid.put(p, bid);
 
                 return #ok();
             };
         }
     };
 
-    public func acceptBid(taskId: Nat64, bidId: Nat64, freelancer: Principal): async Result.Result<(), Text> {
-
+    public func cancelBid(taskId: Nat64, p: Principal): async Result.Result<(), Text> {
         switch(bidEscrow.get(taskId)) {
             case (null) {
                 return #err("Task does not exist");
             };
 
             case (?bids) {
-                switch(bids.get())
-                let newBid = {
-                    id = bid.id;
-                    taskId = bid.taskId;
-                    freelancer;
-                    amount = bid.amount;
-                    created_at = bid.created_at;
-                    status = #Accepted;
-                };
+                switch(bids.get(p)) {
+                    case (null) {
+                        return #err("Bid does not exist");
+                    };
 
-                bidEscrow.put(taskId, newBid);
-                switch (await _deleteBids(taskId)) {
-                    case (#ok) {
-                        return #ok();
+                    case (?bid) {
+                            switch(await _refundFreelancer(p, bid.amount)) {
+                                case (#err(errMsg)) {
+                                    return #err(errMsg);
+                                };
+                                case (#ok) {
+                                    bids.delete(p);
+                                    return #ok();
+                                };
+                            };
+                        };
                     };
-                    case (#err(errMsg)) {
-                        return #err(errMsg);
-                    };
+                };
+            };
+        };
+
+    public func acceptBid(taskId: Nat64, freelancer: Principal): async Result.Result<(), Text> {
+        switch(bidEscrow.get(taskId)) {
+            case (null) {
+                return #err("Task does not exist");
+            };
+
+            case (?bids) {
+                switch(bids.get(freelancer)) {
+                    case (null) { return #err("Bid does not exist"); };
+                    case (?bid) {
+                        let newBid = {
+                            id = bid.id;
+                            taskId = bid.taskId;
+                            freelancer;
+                            amount = bid.amount;
+                            created_at = bid.created_at;
+                            status = #Accepted;
+                        };
+
+                        bids.put(freelancer, newBid);
+                        switch (await _deleteRejectedBids(taskId, freelancer)) {
+                            case (#ok) {
+                                return #ok();
+                            };
+                            case (#err(errMsg)) {
+                                return #err(errMsg);
+                            };
+                        };
+                    }
                 };
             };
         }
@@ -117,14 +156,39 @@ actor {
         return Option.get<Nat64>(taskEscrow.get(taskId), 0);
     };
 
-    public func closeTask(taskId: Nat64, freelancer: Principal): async Result.Result<(), Text> {
+    public func closeTask(taskId: Nat64): async Result.Result<(), Text> {
+        taskEscrow.delete(taskId);
+
+        switch(bidEscrow.get(taskId)) {
+            case (null) {
+                return #err("No bids found");
+            };
+
+            case (?bids) {
+                for((key, bid) in bids.entries()) {
+                    switch(await _refundFreelancer(bid.freelancer, bid.amount)) {
+                        case (#err(errMsg)) {
+                            return #err(errMsg);
+                        };
+                        case (#ok) {
+                            bids.delete(key);
+                        };
+                    };
+                };
+
+                return #ok();
+            }
+        };
+    };
+
+    public func fundFreelancer(taskId: Nat64, p: Principal): async Result.Result<(), Text> {
         switch(taskEscrow.get(taskId)) {
             case (null) {
-                return #err("Task not found");
+                return #err("Task does not exist");
             };
 
             case (?amount) {
-                switch(await LedgerCanister._mint(amount, freelancer)) {
+                switch(await LedgerCanister._mint(amount, p)) {
                     case (#err(errMsg)) {
                         return #err(errMsg);
                     };
@@ -137,29 +201,42 @@ actor {
         };
     };
 
-    func _deleteBids(taskId: Nat64): async Result.Result<(), Text> {
-        for((key, bid) in bidEscrow.entries()) {
-            if(key != taskId and bid.status != #Accepted) {
-                bidEscrow.delete(taskId);
+    func _deleteRejectedBids(taskId: Nat64, p: Principal): async Result.Result<(), Text> {
+        switch(bidEscrow.get(taskId)) {
+            case (null) {
+                return #err("Task does not exist");
             };
-        };
-        return #ok();
+
+            case (?bids) {
+                for((key, bid) in bids.entries()) {
+                    if(key != p) {
+                        bids.delete(key);
+                    };
+                };
+
+                return #ok();
+            };
+        }
     };
 
-    func _refundFreelancer(taskId: Nat64, freelancer: Principal): async Result.Result<(), Text> {
-        for((key, bid) in bidEscrow.entries()) {
-            if(key == taskId) {
-                switch(await LedgerCanister._mint(bid.amount, freelancer)) {
+    func _refundFreelancer(freelancer: Principal, amount: Nat64): async Result.Result<(), Text> {
+                switch(await LedgerCanister._mint(amount, freelancer)) {
                     case (#err(errMsg)) {
                         return #err(errMsg);
                     };
                     case (#ok) {
-                        bidEscrow.delete(key);
                         return #ok();
                     };
                 };
+    };
+
+    func _bidPlaced(p: Principal, bids: [Bid]): Bool {
+        for(bid in Iter.fromArray(bids)) {
+            if(bid.freelancer == p) {
+                return true;
             }
         };
-        return #ok();
+
+        return false;
     };
 }
