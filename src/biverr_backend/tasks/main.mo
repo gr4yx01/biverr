@@ -15,9 +15,9 @@ actor {
     let tasks = HashMap.HashMap<Nat64, Task>(10, Nat64.equal, Nat64.toNat32);
     var taskCounter: TaskId = 1 ;
 
-    public shared ({ caller }) func createTask(title: Text, description: Text, budget: Nat64, deadline: Time.Time, bid_amount_min: Nat64) : async Result.Result<(), Text> {
-        let isAuthenticated = await UserCanister._isAuthenticatedUser(caller);
-        let isClient = await UserCanister._isClient(caller);
+    public shared func createTask(title: Text, description: Text, budget: Nat64, deadline: Time.Time, bid_amount_min: Nat64, p: Principal) : async Result.Result<(), Text> {
+        let isAuthenticated = await UserCanister._isAuthenticatedUser(p);
+        let isClient = await UserCanister._isClient(p);
 
         if(not isAuthenticated) {
             return #err("Unauthorized");
@@ -32,7 +32,7 @@ actor {
             title;
             bid_amount_min;
             description;
-            client = caller;
+            client = p;
             budget;
             created_at = ?Time.now();
             deadline = ?deadline;
@@ -42,7 +42,7 @@ actor {
 
         tasks.put(taskCounter, newTask);
 
-        switch (await EscrowCanister.fundTask(taskCounter, budget, caller)) {
+        switch (await EscrowCanister.fundTask(taskCounter, budget, p)) {
             case (#ok) {};
             case (#err(error)) { return #err(error) };
         };
@@ -52,9 +52,9 @@ actor {
         return #ok();
     };
 
-    public shared ({ caller }) func updateTaskStatus(taskId: Nat64, status: TaskStatus): async Result.Result<(), Text> {
-        let isAuthenticated = await UserCanister._isAuthenticatedUser(caller);
-        let isClient = await UserCanister._isClient(caller);
+    public shared func updateTaskStatus(taskId: Nat64, status: TaskStatus, p: Principal): async Result.Result<(), Text> {
+        let isAuthenticated = await UserCanister._isAuthenticatedUser(p);
+        let isClient = await UserCanister._isClient(p);
 
         if(not isAuthenticated) {
             return #err("Unauthorized");
@@ -87,11 +87,11 @@ actor {
         }
     };
 
-    public shared ({ caller }) func getMyTasks(): async Result.Result<[Task], Text> {
+    public shared  func getMyTasks(p: Principal): async Result.Result<[Task], Text> {
         let clientTasks = Buffer.Buffer<Task>(0);
 
-        let isAuthenticated = await UserCanister._isAuthenticatedUser(caller);
-        let isClient = await UserCanister._isClient(caller);
+        let isAuthenticated = await UserCanister._isAuthenticatedUser(p);
+        let isClient = await UserCanister._isClient(p);
 
         if(not isAuthenticated) {
             return #err("Unauthorized");
@@ -103,7 +103,7 @@ actor {
         
 
         for((key, task) in tasks.entries()) {
-            if(task.client == caller) {
+            if(task.client == p) {
                 clientTasks.add(task);
             }
         };
@@ -136,8 +136,8 @@ actor {
         return #ok(Buffer.toArray(allTasks));
     };
 
-    public shared ({ caller }) func submitTask(id: TaskId): async Result.Result<(), Text> {
-        switch(await UserCanister._isFreelancer(caller)) {
+    public shared func submitTask(id: TaskId, p: Principal): async Result.Result<(), Text> {
+        switch(await UserCanister._isFreelancer(p)) {
             case (false) { return #err("You are not a freelancer") };
             case (true) {};
         };
@@ -165,8 +165,8 @@ actor {
         };
     };
 
-    public shared ({ caller }) func rejectTask(id: TaskId): async Result.Result<(), Text> {
-        switch(await UserCanister._isClient(caller)) {
+    public shared func rejectTask(id: TaskId, p: Principal): async Result.Result<(), Text> {
+        switch(await UserCanister._isClient(p)) {
             case (false) { return #err("You are not a client") };
             case (true) {};
         };
@@ -194,8 +194,8 @@ actor {
         };
     };
 
-    public shared ({ caller }) func approveTask(id: TaskId): async Result.Result<(), Text> {
-        switch(await UserCanister._isClient(caller)) {
+    public shared func approveTask(id: TaskId, p: Principal): async Result.Result<(), Text> {
+        switch(await UserCanister._isClient(p)) {
             case (false) { return #err("You are not a client") };
             case (true) {};
         };
@@ -221,7 +221,7 @@ actor {
                     case (?freelancer) {
                         switch(await EscrowCanister.fundFreelancer(id, freelancer)) {
                             case (#ok) {
-                                switch(await NFTCanister.mintInvoiceNFT(id, freelancer, caller, task.budget)) {
+                                switch(await NFTCanister.mintInvoiceNFT(id, freelancer, p, task.budget)) {
                                     case (#ok(invoice)) {
                                         return #ok();
                                         tasks.put(id, updatedTask);
@@ -239,8 +239,8 @@ actor {
         };
     };
 
-    public shared ({ caller }) func selectFreelancer(id: TaskId, p: Principal): async Result.Result<(), Text> {
-        switch(await UserCanister._isClient(caller)) {
+    public shared func selectFreelancer(id: TaskId, p: Principal): async Result.Result<(), Text> {
+        switch(await UserCanister._isClient(p)) {
             case (false) { return #err("You are not a client") };
             case (true) {};
         };

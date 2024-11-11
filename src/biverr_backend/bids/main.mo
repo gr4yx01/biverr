@@ -11,20 +11,20 @@ import BidType "./types";
 actor {
     type BidStatus = BidType.BidStatus;
     type Bid = BidType.Bid;
-    public shared ({ caller }) func cancelBid(taskId: Nat64) : async Result.Result<(), Text> {
-        let isFreelancer = await UserCanister._isFreelancer(caller);
+    public shared  func cancelBid(taskId: Nat64, p: Principal) : async Result.Result<(), Text> {
+        let isFreelancer = await UserCanister._isFreelancer(p);
         if(not isFreelancer) {
             return #err("You are not a freelancer");
         };
 
-        let taskResult = await TaskCanister.getTaskById(taskId, caller);
+        let taskResult = await TaskCanister.getTaskById(taskId, p);
 
         switch (taskResult) {
             case (#err(errMsg)) {
                 return #err(errMsg);
             };
             case (#ok(task)) {
-                    switch (await EscrowCanister.cancelBid(task.id, caller)) {
+                    switch (await EscrowCanister.cancelBid(task.id, p)) {
                         case (#ok) {
                             return #ok();
                         };
@@ -34,15 +34,15 @@ actor {
         };
     };
 
-    public shared ({ caller }) func bid(taskId: Nat64, amount: Nat64) : async Result.Result<(), Text> {
-        let isFreelancer = await UserCanister._isFreelancer(caller);
+    public shared func bid(taskId: Nat64, amount: Nat64, p: Principal) : async Result.Result<(), Text> {
+        let isFreelancer = await UserCanister._isFreelancer(p);
         var bidCounter: Nat64 = 1;
 
         if(not isFreelancer) {
             return #err("You are not a freelancer");
         };
 
-        let taskResult = await TaskCanister.getTaskById(taskId, caller);
+        let taskResult = await TaskCanister.getTaskById(taskId, p);
 
         switch (taskResult) {
             case (#err(errMsg)) {
@@ -62,7 +62,7 @@ actor {
                 let newBid: Bid = {
                     id = bidCounter;
                     taskId;
-                    freelancer = caller;
+                    freelancer = p;
                     amount;
                     status = #Pending;
                     created_at = ?Time.now();
@@ -70,7 +70,7 @@ actor {
                 
                 bidCounter := bidCounter + 1;
 
-                switch (await EscrowCanister.fundBid(taskId, newBid, caller)) { //  fix
+                switch (await EscrowCanister.fundBid(taskId, newBid, p)) { //  fix
                     case (#ok) {
                         return #ok();
                     };

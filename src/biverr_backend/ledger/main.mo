@@ -7,21 +7,21 @@ import Iter "mo:base/Iter";
 actor Ledger {
     var accounts: HashMap.HashMap<Principal, Nat64> = HashMap.HashMap<Principal, Nat64>(0, Principal.equal, Principal.hash);
 
-    public shared ({ caller }) func deposit(amount: Nat64) : async Result.Result<(), Text> {
-        let currentBalance: Nat64 = Option.get<Nat64>(accounts.get(caller), 0);
+    public shared func deposit(amount: Nat64, p: Principal) : async Result.Result<(), Text> {
+        let currentBalance: Nat64 = Option.get<Nat64>(accounts.get(p), 0);
         
-        accounts.put(caller, currentBalance + amount);
+        accounts.put(p, currentBalance + amount);
         return #ok();
     };
 
-    public shared ({ caller }) func withdraw(amount: Nat64) : async Result.Result<(), Text> {
-        let currentBalance: Nat64 = Option.get<Nat64>(accounts.get(caller), 0);
+    public shared func withdraw(amount: Nat64, p: Principal) : async Result.Result<(), Text> {
+        let currentBalance: Nat64 = Option.get<Nat64>(accounts.get(p), 0);
         
         if (currentBalance < amount) {
             return #err("Insufficient balance");
         };
 
-        accounts.put(caller, currentBalance - amount);
+        accounts.put(p, currentBalance - amount);
         return #ok();
     };
 
