@@ -21,7 +21,7 @@ actor {
         // };
 
         let profileToCreate : Profile = {
-            id = caller;
+            id = p;
             name;
             role;
             created_at = Time.now();
