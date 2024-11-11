@@ -10,9 +10,9 @@ actor {
     type Result<Ok, Err> = Types.Result<Ok, Err>; 
     let users : HashMap.HashMap<Principal, Profile> = HashMap.HashMap<Principal, Profile>(0, Principal.equal, Principal.hash);
 
-    public shared({ caller }) func register(name: Text, role: Types.Role) : async Result.Result<(), Text> {
+    public shared func register(name: Text, role: Types.Role, p: Principal) : async Result.Result<(), Text> {
 
-        if(await _isAuthenticatedUser(caller)) {
+        if(await _isAuthenticatedUser(p)) {
             return #err("Already registered");
         };
 
@@ -28,7 +28,7 @@ actor {
             rating = 0.0;
         };
 
-        users.put(caller, profileToCreate);
+        users.put(p, profileToCreate);
         
         return #ok();
     };
@@ -37,8 +37,8 @@ actor {
         return Iter.toArray(users.vals());
     };
 
-    public shared ({ caller }) func getProfile() : async Result.Result<Profile, Text> {
-        switch(users.get(caller)) {
+    public shared func getProfile(p: Principal) : async Result.Result<Profile, Text> {
+        switch(users.get(p)) {
             case(null) { return #err("Profile not found"); };
             case(?profile) { return #ok(profile); };
         };
